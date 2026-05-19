@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# CDK project: environment/lib is TypeScript source, not a Python build artifact.
+# Re-include it despite the generic "lib/" rule above.
+!environment/lib/
