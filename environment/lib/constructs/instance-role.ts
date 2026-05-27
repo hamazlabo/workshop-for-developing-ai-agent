@@ -1,5 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Construct } from 'constructs';
 
 export interface InstanceRoleProps {
@@ -19,8 +21,7 @@ export class InstanceRole extends Construct {
       roleName: props?.roleName ?? 'workshop-instance-role',
       description: props?.description ?? 'IAM role for workshop instances',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('BedrockAgentCoreFullAccess')
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
       ]
     });
 
@@ -46,15 +47,13 @@ export class InstanceRole extends Construct {
         }
       }
     }));
-    // ここから下に、必要に応じて権限を追加する
-    // Ex. Bedrock関連（AIエージェント構築ハンズオン用）
-    this.role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'bedrock:InvokeModelWithResponseStream',
-        'bedrock:InvokeModel'
-      ],
-      resources: ['*']
-    }));
+    // AgentCore ハンズオン用ポリシー（Bedrock 呼び出し権限を含む）を policy.json から付与する
+    // ファイル内の ACCOUNT_ID プレースホルダをデプロイ先アカウントに置換する
+    const policyPath = path.join(__dirname, 'policy.json');
+    const policyJson = fs.readFileSync(policyPath, 'utf8')
+      .replace(/ACCOUNT_ID/g, cdk.Stack.of(this).account);
+    new iam.Policy(this, 'AgentCoreWorkshopPolicy', {
+      document: iam.PolicyDocument.fromJson(JSON.parse(policyJson))
+    }).attachToRole(this.role);
   }
 }

@@ -1,51 +1,159 @@
 # 03_AgentCoreを使ったエージェントデプロイ
 
-## デプロイ準備
+## 3.1. デプロイ準備
 
-### 必要なパッケージをインストール
+### 3.1.1. ホームディレクトリへ移動
 
-AgentCore に関わるライブラリをインストール。
-
-```sh
-uv add bedrock-agentcore bedrock-agentcore-starter-toolkit
+```bash
+cd ~
 ```
 
-### main.py をリネームする
-
-main.py を、weather_reporter_xxxxxx.py にリネームする。
-
-※ xxxxxx には、ローマ字姓名(例:isseihamada)を入れて下さい。
+### 3.1.2. AgentCore SDK をインストール
 
 ```sh
-mv main.py weather_reporter_xxxxxx.py
+sudo npm install -g @aws/agentcore
 ```
 
-エージェントをデプロイする際、ファイル名がそのままエージェント名になります。
-ワークショップ参加者間で重複を避ける為、自分の姓名を入れています。
+期待する出力:
 
-### 天気予報士エージェントを AgentCore 対応に書き換える
+```txt
+added 763 packages in 35s
 
-以下を weather_reporter_xxxxxx.py にコピーペーストする。4か所変わっている。
+266 packages are looking for funding
+  run `npm fund` for details
+npm notice
+npm notice New minor version of npm available! 11.12.1 -> 11.15.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+npm notice To update run: npm install -g npm@11.15.0
+npm notice
+```
+
+## 3.2. AgentCore SDK を使って、エージェントをデプロイする
+
+### 3.2.1. TUI を起動する
+
+以下コマンドを実行する。
+
+```bash
+agentcore
+```
+
+以下のような画面が起動する
+
+```text
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ >_ AgentCore                                                                                           v0.15.0 │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  >  
+
+
+  No AgentCore project found in this directory.
+
+  You can:
+    create - Create a new AgentCore project here
+    or cd into an existing project directory
+
+  ⚑ Press Enter to create a new project
+
+  ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Type to search, Tab commands, Esc quit
+```
+
+### 3.2.2. 対話的に設定を入力する
+
+1. コマンドを入力
+    > create
+2. Project name を入力 (重複しなければ何でも良い)
+    > ex. MyProject
+3. would you like add an agent?(エージェントを追加する?)
+    > Yes, add an agent
+4. Agent name を入力 (重複しないものを入力する)
+    > ex. MyAgent
+    
+    ハイフンは使えないので注意
+
+5. Select agent type
+    > Create new agent
+6. Language
+    > Python
+7. Build
+    > Direct Code deploy
+8. Protocol
+    > HTTP
+9. Framework
+    > Strands Agents SDK
+10. Model
+    > Amazon Bedrock
+11. Memory
+    > Short-term memory
+12. Advanced
+    > 何も選択せず Enter
+13. Review
+    > 確認して Enter
+
+期待する値:
+
+Project created successfully!
+
+のようなメッセージが表示されれば、セットアップ完了。
+
+### 3.2.3. ディレクトリ構成を確認する
+
+プロジェクト構成:
+
+```txt
+my-project/
+├── agentcore/
+│   ├── .env.local          # API keys (gitignored)
+│   ├── agentcore.json      # Resource specifications
+│   ├── aws-targets.json    # Deployment targets
+│   └── cdk/                # CDK infrastructure
+├── app/                    # Application code
+```
+
+アプリ構成:
+
+```txt
+├── app/                    # Application code
+│   └── <AgentName>/        # Agent directory
+│       ├── main.py         # Agent entry point
+│       ├── memory          # Memory configuration
+│       ├── pyproject.toml  # Python dependencies
+│       └── model/          # Model configuration
+```
+
+ポイント:
+
+- agentcore cli は、aws cdk のラッパー
+- AI エージェントの設定をヒアリングして、cdk の設定ファイルを良い感じに作ってくれる
+
+## 3.3. 天気予報エージェントを作成する
+
+### 3.3.1. 天気予報士エージェントを AgentCore 対応に書き換える
+
+以下を /home/ubuntu/hmddev/app/MyAgent/main.py にコピーペーストする。4か所変わっている。
 
 ```py
-import argparse
-import json
+from typing import Any
 
-from strands import Agent
-from strands.models import BedrockModel
-from strands.session.file_session_manager import FileSessionManager
-from strands.agent.conversation_manager import SlidingWindowConversationManager
+from strands import Agent, tool
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+from model.load import load_model
+from mcp_client.client import get_streamable_http_mcp_client
+from memory.session import get_memory_session_manager
 
 from datetime import datetime
 from tools.weather_forecast import get_weather_forecast
 
-from bedrock_agentcore.runtime import BedrockAgentCoreApp # AgentCoreライブラリを追加
+app = BedrockAgentCoreApp()
+log = app.logger
 
-app = BedrockAgentCoreApp() # AgentCore インスタンス作成
+# Define a Streamable HTTP MCP Client
+mcp_clients = [get_streamable_http_mcp_client()]
 
-MODEL_ID = "global.anthropic.claude-sonnet-4-20250514-v1:0"
-
-SYSTEM_PROMPT="""
+DEFAULT_SYSTEM_PROMPT = """
 あなたは親しみやすく正確な気象予報士です。ユーザーから都道府県名を受け取り、天気予報情報を提供します。
 
 ## 主要機能
@@ -109,195 +217,246 @@ SYSTEM_PROMPT="""
 ユーザーの安全と快適な日常生活をサポートすることがあなたの使命です。常に親切で、正確で、役立つ情報提供を心がけてください。
 """
 
-CONVERSATION_MANAGER = SlidingWindowConversationManager(
-    window_size=20,
-    should_truncate_results=True,
-)
+# Define a collection of tools used by the model
+tools = [get_weather_forecast]
 
-@app.entrypoint # エージェントを呼び出すエントリポイント関数を指定
-def invoke_agent(payload):
-    now = datetime.now()
-    system_prompt = SYSTEM_PROMPT + f"""
-    現在の時刻: {now}
-    """
+# Add MCP client to tools if available
+for mcp_client in mcp_clients:
+    if mcp_client:
+        tools.append(mcp_client)
 
-    session_manager = FileSessionManager(
-        session_id=payload.get("sessionId"),
-        storage_dir="/tmp/.sessions"
-    )
+def agent_factory():
+    cache = {}
+    def get_or_create_agent(session_id, user_id):
+        key = f"{session_id}/{user_id}"
+        if key not in cache:
+            # Create an agent for the given session_id and user_id
+            now = datetime.now()
+            system_prompt = DEFAULT_SYSTEM_PROMPT + f"""
+            現在の時刻: {now}
+            """
+            cache[key] = Agent(
+                model=load_model(),
+                session_manager=get_memory_session_manager(session_id, user_id),
+                system_prompt=system_prompt,
+                tools=tools
+            )
+        return cache[key]
+    return get_or_create_agent
+get_or_create_agent = agent_factory()
 
-    bedrock_model = BedrockModel(
-        model_id=MODEL_ID,
-        region_name="us-west-2"
-    )
 
-    agent = Agent(
-        model=bedrock_model,
-        system_prompt=system_prompt,
-        session_manager=session_manager,
-        conversation_manager=CONVERSATION_MANAGER,
-        tools=[get_weather_forecast]
-    )
+@app.entrypoint
+async def invoke(payload, context):
+    log.info("Invoking Agent.....")
 
-    prompt = payload.get("prompt")
-    response = agent(prompt)
-    return response.message['content'][0]['text']
+    session_id = getattr(context, 'session_id', 'default-session')
+    user_id = getattr(context, 'user_id', 'default-user')
+    agent = get_or_create_agent(session_id, user_id)
 
-# 実行関数を変更
+    # Execute and format response
+    stream = agent.stream_async(payload.get("prompt"))
+
+    async for event in stream:
+        # Handle Text parts of the response
+        if "data" in event and isinstance(event["data"], str):
+            yield event["data"]
+
+
 if __name__ == "__main__":
     app.run()
 ```
 
-### テスト起動
+### 3.3.2. ツールをコピー
 
-以下コマンドを実行すると、8080ポートで web サーバが起動する。
+`workshop-dor-developing-ai-agent/tools` をコピーし、`/home/ubuntu/MyProject/app/MyAgent` 直下へ移動
 
-```sh
-uv run weather_reporter_xxxxxx.py
-```
+### 3.3.3. テスト起動
 
-戻り値は何もないが、問題なし。
-
-### 別ターミナルからテスト実行
-
-ターミナルの右上「split terminal」でターミナルを分割し、以下を実行
-
-```sh
-curl -X POST http://localhost:8080/invocations \
-    -H "Content-Type: application/json" \
-    -d '{"sessionId": "52433935-c9fd-480c-e3d2-d8a91369b3db", "prompt": "今日の横浜の天気を教えて下さい。"}' | jq -r .
-```
-
-curl 実行側のターミナルに、レスポンスが返ってくるはず。
-
-## agentcore starter tooolkit を使ってエージェントをデプロイ
-
-### config ファイルを作成する
-
-ターミナルで以下コマンドを実行し、AWS アカウント ID を控える。
+プロジェクトディレクトリへ移動する。
 
 ```bash
-aws sts get-caller-identity
+cd ~/<プロジェクトディレクトリ>
 ```
 
-**レスポンス:**
-
-```json
-{
-    "UserId": "AIDA3L7MCxxxxxxxxxxxx",
-    "Account": "xxxxxxxxxxxx",
-    "Arn": "arn:aws:iam::xxxxxxxxxxxx:user/issei.hamada"
-}
-```
-
-後で利用する為、Account の値を控えておく。
-
-以下コマンドを実行し、必要な設定ファイルを作成する。
-
-※ エージェント名は重複出来ない
+以下コマンドを実行すると、テスト用のターミナルが起動する。
 
 ```sh
-agentcore configure -e weather_reporter_xxxxxx.py
-
-# 対話式で各種リソースを作成する(今回は全てデフォルトでOK)
-Configuring Bedrock AgentCore...
-✓ Using file: weather_reporter.py
-
-# 依存関係の解決に使うファイル名を入力
-🔍 Detected dependency file: pyproject.toml
-Press Enter to use this file, or type a different path (use Tab for autocomplete):
-Path or Press Enter to use detected dependency file: pyproject.toml
-✓ Using requirements file: pyproject.toml
-
-# デプロイ設定(2025/11に、直接 Python コードを利用出来るようになった)
-🚀 Deployment Configuration
-Select deployment type:
-  1. Direct Code Deploy (recommended) - Python only, no Docker required
-  2. Container - For custom runtimes or complex dependencies
-Choice [1]: 1
-
-Select Python runtime version:
-  1. PYTHON_3_10
-  2. PYTHON_3_11
-  3. PYTHON_3_12
-  4. PYTHON_3_13
-Choice [3]: 3
-✓ Deployment type: Direct Code Deploy (python.3.12)
-
-# 実行ロールを指定: agentcore-execution-role
-🔐 Execution Role
-Press Enter to auto-create execution role, or provide execution role ARN/name to use existing
-Execution role ARN/name (or press Enter to auto-create): agentcore-execution-role
-✓ Will auto-create execution role
-
-# S3 バケット作成: 
-# 次の xxx を AWS アカウント ID で置き換えて入力
-# agentcore-deployment-bucket-xxxxxxxxxxxx
-🏗️  S3 Bucket
-Press Enter to auto-create S3 bucket, or provide S3 URI/path to use existing
-S3 URI/path (or press Enter to auto-create): agentcore-deployment-bucket-xxxxxxxxxxxx
-
-# AgentCore の認証に OAuth を使うか
-🔐 Authorization Configuration
-By default, Bedrock AgentCore uses IAM authorization.
-Configure OAuth authorizer instead? (yes/no) [no]:
-✓ Using default IAM authorization
-
-# リクエストヘッダーにホワイトリストを使うか
-🔒 Request Header Allowlist
-Configure which request headers are allowed to pass through to your agent.
-Common headers: Authorization, X-Amzn-Bedrock-AgentCore-Runtime-Custom-*
-Configure request header allowlist? (yes/no) [no]:
-✓ Using default request header configuration
-Configuring BedrockAgentCore agent: weather_reporter_code_server_1
-
-Memory Configuration
-Tip: Use --disable-memory flag to skip memory entirely
-
-✅ MemoryManager initialized for region: us-west-2
-
-Options:
-  • Enter a number to use existing memory
-  • Press Enter to create new memory
-  • Type 's' to skip memory setup
-Your choice:
-✓ Short-term memory will be enabled (default)
-  • Stores conversations within sessions
-  • Provides immediate context recall
-
-Optional: Long-term memory
-  • Extracts user preferences across sessions
-  • Remembers facts and patterns
-  • Creates session summaries
-  • Note: Takes 120-180 seconds to process
-
-Enable long-term memory? (yes/no) [no]:
-✓ Using short-term memory only
-Will create new memory with mode: STM_ONLY
-Memory configuration: Short-term memory only
-Network mode: PUBLIC
+agentcore dev --no-browser
 ```
 
-全て入力すると、コンフィグファイルが作成され、保存される。
+そのままプロンプトを入力できるので、何か入れてみる。
 
-/home/ubuntu/sample-agent/.bedrock_agentcore.yaml
-
-### デプロイコマンドを実行
-
-```sh
-agentcore launch
+```txt
+今日の横浜の天気を教えて下さい。
 ```
 
-自動で関連リソースが作成される。
+エラー無く、天気予報が返ってきたら正常に動作している。
 
-✅ CodeBuild Deployment Successful! と表示されればデプロイ完了。
+### 3.3.4. AgentCore Runtime 上にデプロイ
 
-### デプロイした AgentCore Runtime を実行
+デプロイコマンドを実行する。
 
-agentcore-starter-toolkit を使って、AgentCore を実行出来る。
-
-```sh
-agentcore invoke '{"sessionId": "52433935-c9fd-480c-e3d2-d8a91369b3db", "prompt": "今日の横浜の天気を教えて下さい。"}'
+```bash
+agentcore deploy
 ```
 
-天気予報が返ってくれば、AgentCore Runtime のデプロイは成功です。
+デプロイが進んで、以下のようなテキストが出力されたら成功。
+
+```txt
+ AgentCore Deploy
+
+ Project: hmddev
+ Target: us-east-1:012345678910
+
+ [done]    Validate project
+ [done]    Check dependencies
+ [done]    Build CDK project
+ [done]    Synthesize CloudFormation
+ [done]    Check stack status
+ [done]    Computing diff changes...
+ [done]    Publish assets
+
+ ╭────────────────────────────────────────────────╮
+ │ ✓ Deploy to AWS Complete                       │
+ │                                                │
+ │ [████████████████████] 7/7                     │
+ ╰────────────────────────────────────────────────╯
+
+ Deployed 1 stack(s): AgentCore-hmddev-default
+```
+
+作成されるリソース:
+
+- AgentCore Runtime
+- AgentCore Runtime Executiron Role
+- AgentCore Memory
+- AgentCore Memory Executiron Role
+
+関連するリソースを一式作成してくれる。
+
+## 3.4. エージェントを実行する
+
+今回は AgentCore SDK 経由で実行する。
+
+### 3.4.1. プロジェクトディレクトリへ移動する
+
+```bash
+cd ~/<プロジェクトディレクトリ>
+```
+
+### 3.4.2. 普通に実行してみる
+
+```bash
+agentcore invoke --prompt "今日の横浜の天気を教えて下さい。"
+```
+
+天気予報してくれれば、成功。
+
+### 3.4.3. セッション状態を維持させてみる
+
+引数に `session-id` と `user-id` を渡す事で、マルチターンの会話が可能。
+
+1ターン目:
+
+```bash
+agentcore invoke "こんにちは！私の名前は濱田一成です。あなたの名前を教えて下さい。" \
+  --session-id "38efd7b6-474d-85d3-cdec-17d51017f165" \
+  --user-id "3ebd9a7d-d08a-c2ad-1335-c056fd459a86"
+```
+
+2ターン目:
+
+```bash
+agentcore invoke "ところで、私の名前を覚えていますか？" \
+  --session-id "38efd7b6-474d-85d3-cdec-17d51017f165" \
+  --user-id "3ebd9a7d-d08a-c2ad-1335-c056fd459a86"
+```
+
+### 3.4.4. セッション ID を変えてみる
+
+session-id を変えて、実行する。
+
+```bash
+agentcore invoke "私の名前を覚えていますか？" \
+  --session-id "35abb1a6-257a-13af-b1f1-6b8882aa0e57" \
+  --user-id "2b27b39e-add2-6024-9fad-8ee8a59e7f95"
+```
+
+恐らく、「まだ教えてもらっていません、、、」のように返ってくるはず。
+
+### 3.4.5. ストリーミングレスポンスとして受ける
+
+CLI を使う場合は、シンプルにオプションを付けるだけ。
+
+```bash
+agentcore invoke --prompt "今日の横浜の天気を教えて下さい。" --stream
+```
+
+## 3.5. クリーンアップ
+
+全ての検証が終わったら、作成したリソースを削除する。
+設定ファイルを空に -> cdk deploy(空にアップデートする) のような作業を実施する。
+
+### 3.5.1. プロジェクトディレクトリへ移動
+
+```bash
+cd ~/<プロジェクトディレクトリ>
+```
+
+### 3.5.1. 設定ファイルからリソースを削除
+
+```bash
+agentcore remove all
+```
+
+AgentCore schemas reset successfully と表示されれば、成功。
+
+### 3.5.2. 設定ファイルの内容を環境へ反映
+
+```bash
+agentcore deploy
+```
+
+削除していい？みたいな事を聞かれるので、y を押下。
+削除が始まる。
+
+## AI エージェントを本番で運用する方法
+
+CLI は様々なリソースをラップしているので、CI/CD に組み込んで開発を回したり、アプリから実行するには不向き。
+
+### リソース管理の方法: ECR デプロイを行う
+
+AgentCore Runtime のデプロイ方法には今回利用した Direct Code Deploy 以外に、ECR 上のコンテナイメージを使う方法がある。
+リソース定義に CDK(or Terraform)を使い、別途ビルドした ECR を参照する事で、リソース管理とコード管理を分けられる。
+
+### アプリからの呼び出し: AgentCore SDK を使う
+
+CLI でラップされている SDK をそのまま使うだけ。
+
+```python
+import boto3
+import json
+
+client = boto3.client("bedrock-agentcore", region_name="us-east-1")
+
+response = client.invoke_agent_runtime(
+    agentRuntimeArn="arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc123",
+    payload=json.dumps({"prompt": "Hello!"}).encode("utf-8"),
+    contentType="application/json",
+    accept="application/json, text/event-stream",
+    runtimeSessionId="session-2025-05-27",   # optional
+    runtimeUserId="user@example.com",         # optional
+    qualifier="DEFAULT",                       # optional
+)
+
+# response["response"] が StreamingBody
+body = response["response"].read()
+print(body.decode("utf-8"))
+print("session:", response.get("runtimeSessionId"))
+```
+
+CLI だとパラメータ周りを上手く参照してくれるが、引数として設定する。
+
+---
+以上で、本セクションは終了です。

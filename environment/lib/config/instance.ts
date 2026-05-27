@@ -12,7 +12,7 @@ export interface InstanceConfig {
 export const instanceConfig = {
   CodeServer: {
     instanceName: 'code-server',
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
     blockDevices: [
       {
         // ルートボリューム
@@ -32,7 +32,7 @@ export const instanceConfig = {
   },
   RocketChat: {
     instanceName: 'rocket-chat',
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
     blockDevices: [
       {
         // ルートボリューム

@@ -21,6 +21,8 @@ rm -rf aws-sam-cli-linux-x86_64.zip sam-installation/
 
 ## Kiro CLI のインストール
 curl -fsSL https://cli.kiro.dev/install | bash
+sudo dpkg -i kiro-cli.deb
+sudo apt-get install -f
 
 # Python 3.14のインストール（deadsnakes PPAから最新版を導入）
 sudo apt install -y software-properties-common
