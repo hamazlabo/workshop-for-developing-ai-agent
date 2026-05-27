@@ -12,12 +12,12 @@ export interface InstanceConfig {
 export const instanceConfig = {
   CodeServer: {
     instanceName: 'code-server',
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
+    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
     blockDevices: [
       {
         // ルートボリューム
         deviceName: '/dev/sda1',
-        volume: ec2.BlockDeviceVolume.ebs(20, {
+        volume: ec2.BlockDeviceVolume.ebs(80, {
           volumeType: ec2.EbsDeviceVolumeType.GP3,
           deleteOnTermination: true,
         }),
@@ -37,7 +37,7 @@ export const instanceConfig = {
       {
         // ルートボリューム
         deviceName: '/dev/sda1',
-        volume: ec2.BlockDeviceVolume.ebs(20, {
+        volume: ec2.BlockDeviceVolume.ebs(80, {
           volumeType: ec2.EbsDeviceVolumeType.GP3,
           deleteOnTermination: true,
         }),

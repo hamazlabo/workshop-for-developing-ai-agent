@@ -19,7 +19,7 @@ export class WorkshopStack extends cdk.Stack {
 
     // 3台のcode-serverインスタンスを作成
     const instances: Instance[] = [];
-    for (let i = 1; i <= 1; i++) {
+    for (let i = 1; i <= 15; i++) {
       const instance = new Instance(this, `CodeServer${i}`, {
         vpc: vpc.vpc,
         config: {
