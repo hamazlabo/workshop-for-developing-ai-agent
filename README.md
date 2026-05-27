@@ -1,4 +1,5 @@
 # workshop-for-developing-ai-agent
+
 Strands Agents を使って、AI エージェントを作成するワークショップです。フレームワークの基礎からシステムプロンプトの役割、ツールの設計方法など、基礎を包括的に学ぶことが出来ます。
 
 ## 本ワークショップで学べる概念
@@ -61,6 +62,17 @@ cdk deploy
 # 特定の AWS プロファイルを使用する場合
 cdk deploy --profile xxx
 ```
+
+### code-server の台数を変更する
+
+参加者数に応じて、構築する code-server インスタンスの台数を変更できます。`environment/lib/workshop-stack.ts` のループの上限値を編集してください。
+
+```typescript
+// 例: 25 台の code-server インスタンスを作成する場合
+for (let i = 1; i <= 25; i++) {
+```
+
+上限値が作成される台数になります (`i <= 1` なら 1 台、`i <= 25` なら 25 台)。編集後に `cdk deploy` を実行すると、台数が反映されます。
 
 ### インスタンスへのアクセス
 
