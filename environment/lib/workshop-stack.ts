@@ -19,7 +19,7 @@ export class WorkshopStack extends cdk.Stack {
 
     // 3台のcode-serverインスタンスを作成
     const instances: Instance[] = [];
-    for (let i = 1; i <= 15; i++) {
+    for (let i = 1; i <= 20; i++) {
       const instance = new Instance(this, `CodeServer${i}`, {
         vpc: vpc.vpc,
         config: {
@@ -32,10 +32,10 @@ export class WorkshopStack extends cdk.Stack {
     }
 
     // RocketChatインスタンスを作成（CloudFront で HTTPS 化）
-    new RocketChat(this, 'RocketChat', {
-      vpc: vpc.vpc,
-      config: instanceConfig.RocketChat,
-      instanceRole: workshopRole.role
-    });
+    // new RocketChat(this, 'RocketChat', {
+    //   vpc: vpc.vpc,
+    //   config: instanceConfig.RocketChat,
+    //   instanceRole: workshopRole.role
+    // });
   }
 }

@@ -141,6 +141,16 @@
       "Resource": "*"
     },
     {
+      "Sid": "BedrockMarketplaceModelSubscription",
+      "Effect": "Allow",
+      "Action": [
+        "aws-marketplace:Subscribe",
+        "aws-marketplace:Unsubscribe",
+        "aws-marketplace:ViewSubscriptions"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "BedrockAgentImport",
       "Effect": "Allow",
       "Action": [
